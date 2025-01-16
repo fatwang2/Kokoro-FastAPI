@@ -27,7 +27,7 @@ services:
     build:
       context: ../../ui
     ports:
-      - "7860:7860"
+      - "7870:7860"
     volumes:
       - ../../ui/data:/app/ui/data
       - ../../ui/app.py:/app/app.py  # Mount app.py for hot reload

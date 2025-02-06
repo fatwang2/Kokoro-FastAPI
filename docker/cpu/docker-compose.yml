@@ -8,6 +8,7 @@ services:
     user: root
     volumes:
       - ../../api:/app/api
+      - /tmp:/tmp
     ports:
       - "8880:8880"
     environment:

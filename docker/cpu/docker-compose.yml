@@ -9,6 +9,7 @@ services:
     volumes:
       - ../../api:/app/api
       - /tmp:/tmp
+      - /app/api/src/models:/app/api/src/models
     ports:
       - "8880:8880"
     environment:

@@ -8,7 +8,7 @@ export class AudioService {
         this.minimumPlaybackSize = 50000; // 50KB minimum before playback
         this.textLength = 0;
         this.shouldAutoplay = false;
-        this.CHARS_PER_CHUNK = 300; // Estimated chars per chunk
+        this.CHARS_PER_CHUNK = 150; // Estimated chars per chunk
         this.serverDownloadPath = null; // Server-side download path
         this.pendingOperations = []; // Queue for buffer operations
     }
@@ -39,10 +39,12 @@ export class AudioService {
                 body: JSON.stringify({
                     input: text,
                     voice: voice,
-                    response_format: 'mp3',
+                    response_format: 'mp3', // Always use mp3 for streaming playback
+                    download_format: document.getElementById('format-select').value || 'mp3', // Format for final download
                     stream: true,
                     speed: speed,
-                    return_download_link: true
+                    return_download_link: true,
+                    lang_code: document.getElementById('lang-select').value || undefined
                 }),
                 signal: this.controller.signal
             });
@@ -137,6 +139,12 @@ export class AudioService {
                     // Signal completion
                     onProgress?.(estimatedChunks, estimatedChunks);
                     this.dispatchEvent('complete');
+                    
+                    // Check if we should autoplay for small inputs that didn't trigger during streaming
+                    if (this.shouldAutoplay && !hasStartedPlaying && this.sourceBuffer.buffered.length > 0) {
+                        setTimeout(() => this.play(), 100);
+                    }
+                    
                     setTimeout(() => {
                         this.dispatchEvent('downloadReady');
                     }, 800);
@@ -256,19 +264,46 @@ export class AudioService {
 
         // Don't process if audio is in error state
         if (this.audio.error) {
-            console.warn('Skipping operation due to audio error');
+            console.warn("Skipping operation due to audio error");
             return;
         }
 
         const operation = this.pendingOperations.shift();
-        
+
         try {
             this.sourceBuffer.appendBuffer(operation.chunk);
-            operation.resolve();
+
+            // Set up event listeners
+            const onUpdateEnd = () => {
+                operation.resolve();
+                this.sourceBuffer.removeEventListener("updateend", onUpdateEnd);
+                this.sourceBuffer.removeEventListener(
+                    "updateerror",
+                    onUpdateError
+                );
+                // Process the next operation
+                this.processNextOperation();
+            };
+
+            const onUpdateError = (event) => {
+                operation.reject(event);
+                this.sourceBuffer.removeEventListener("updateend", onUpdateEnd);
+                this.sourceBuffer.removeEventListener(
+                    "updateerror",
+                    onUpdateError
+                );
+                // Decide whether to continue processing
+                if (event.name !== "InvalidStateError") {
+                    this.processNextOperation();
+                }
+            };
+
+            this.sourceBuffer.addEventListener("updateend", onUpdateEnd);
+            this.sourceBuffer.addEventListener("updateerror", onUpdateError);
         } catch (error) {
             operation.reject(error);
             // Only continue processing if it's not a fatal error
-            if (error.name !== 'InvalidStateError') {
+            if (error.name !== "InvalidStateError") {
                 this.processNextOperation();
             }
         }
@@ -356,14 +391,14 @@ export class AudioService {
             this.controller.abort();
             this.controller = null;
         }
-        
+
         if (this.audio) {
             this.audio.pause();
-            this.audio.src = '';
+            this.audio.src = "";
             this.audio = null;
         }
 
-        if (this.mediaSource && this.mediaSource.readyState === 'open') {
+        if (this.mediaSource && this.mediaSource.readyState === "open") {
             try {
                 this.mediaSource.endOfStream();
             } catch (e) {
@@ -372,27 +407,29 @@ export class AudioService {
         }
 
         this.mediaSource = null;
-        this.sourceBuffer = null;
+        if (this.sourceBuffer) {
+            this.sourceBuffer.removeEventListener("updateend", () => {});
+            this.sourceBuffer.removeEventListener("updateerror", () => {});
+            this.sourceBuffer = null;
+        }
         this.serverDownloadPath = null;
         this.pendingOperations = [];
-
-        window.location.reload();
     }
 
     cleanup() {
         if (this.audio) {
             this.eventListeners.forEach((listeners, event) => {
-                listeners.forEach(callback => {
+                listeners.forEach((callback) => {
                     this.audio.removeEventListener(event, callback);
                 });
             });
-            
+
             this.audio.pause();
-            this.audio.src = '';
+            this.audio.src = "";
             this.audio = null;
         }
 
-        if (this.mediaSource && this.mediaSource.readyState === 'open') {
+        if (this.mediaSource && this.mediaSource.readyState === "open") {
             try {
                 this.mediaSource.endOfStream();
             } catch (e) {
@@ -401,7 +438,11 @@ export class AudioService {
         }
 
         this.mediaSource = null;
-        this.sourceBuffer = null;
+        if (this.sourceBuffer) {
+            this.sourceBuffer.removeEventListener("updateend", () => {});
+            this.sourceBuffer.removeEventListener("updateerror", () => {});
+            this.sourceBuffer = null;
+        }
         this.serverDownloadPath = null;
         this.pendingOperations = [];
     }

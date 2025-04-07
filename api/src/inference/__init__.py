@@ -1,16 +1,12 @@
 """Model inference package."""
 
 from .base import BaseModelBackend
+from .kokoro_v1 import KokoroV1
 from .model_manager import ModelManager, get_manager
-from .onnx_cpu import ONNXCPUBackend
-from .onnx_gpu import ONNXGPUBackend
-from .pytorch_backend import PyTorchBackend
 
 __all__ = [
-    'BaseModelBackend',
-    'ModelManager',
-    'get_manager',
-    'ONNXCPUBackend',
-    'ONNXGPUBackend',
-    'PyTorchBackend',
+    "BaseModelBackend",
+    "ModelManager",
+    "get_manager",
+    "KokoroV1",
 ]

@@ -14,10 +14,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from .core.config import settings
-from .routers.web_player import router as web_router
+from .routers.debug import router as debug_router
 from .routers.development import router as dev_router
 from .routers.openai_compatible import router as openai_router
-from .routers.debug import router as debug_router
+from .routers.web_player import router as web_router
 
 
 def setup_logger():
@@ -28,9 +28,10 @@ def setup_logger():
                 "sink": sys.stdout,
                 "format": "<fg #2E8B57>{time:hh:mm:ss A}</fg #2E8B57> | "
                 "{level: <8} | "
+                "<fg #4169E1>{module}:{line}</fg #4169E1> | "
                 "{message}",
                 "colorize": True,
-                "level": "INFO",
+                "level": "DEBUG",
             },
         ],
     }
@@ -41,6 +42,7 @@ def setup_logger():
 
 # Configure logger
 setup_logger()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,30 +57,20 @@ async def lifespan(app: FastAPI):
     logger.info("Loading TTS model and voice packs...")
 
     try:
-        # Initialize managers globally
+        # Initialize managers
         model_manager = await get_manager()
         voice_manager = await get_voice_manager()
 
         # Initialize model with warmup and get status
-        device, model, voicepack_count = await model_manager.initialize_with_warmup(voice_manager)
-    except FileNotFoundError:
-        logger.error("""
-Model files not found! You need to either:
+        device, model, voicepack_count = await model_manager.initialize_with_warmup(
+            voice_manager
+        )
 
-1. Download models using the scripts:
-   GPU: python docker/scripts/download_model.py --type pth
-   CPU: python docker/scripts/download_model.py --type onnx
-
-2. Set environment variables in docker-compose:
-   GPU: DOWNLOAD_PTH=true
-   CPU: DOWNLOAD_ONNX=true
-""")
-        raise
     except Exception as e:
         logger.error(f"Failed to initialize model: {e}")
         raise
-        
-    boundary = "░" * 2*12
+
+    boundary = "░" * 2 * 12
     startup_msg = f"""
 
 {boundary}
@@ -93,14 +85,23 @@ Model files not found! You need to either:
 {boundary}
                 """
     startup_msg += f"\nModel warmed up on {device}: {model}"
+    if device == "mps":
+        startup_msg += "\nUsing Apple Metal Performance Shaders (MPS)"
+    elif device == "cuda":
+        startup_msg += f"\nCUDA: {torch.cuda.is_available()}"
+    else:
+        startup_msg += "\nRunning on CPU"
     startup_msg += f"\n{voicepack_count} voice packs loaded"
-    
+
     # Add web player info if enabled
     if settings.enable_web_player:
-        startup_msg += f"\n\nBeta Web Player: http://{settings.host}:{settings.port}/web/"
+        startup_msg += (
+            f"\n\nBeta Web Player: http://{settings.host}:{settings.port}/web/"
+        )
+        startup_msg += f"\nor http://localhost:{settings.port}/web/"
     else:
         startup_msg += "\n\nWeb Player: disabled"
-        
+
     startup_msg += f"\n{boundary}\n"
     logger.info(startup_msg)
 

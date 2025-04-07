@@ -1,30 +1,30 @@
-name: kokoro-tts
+name: kokoro-tts-gpu
 services:
   kokoro-tts:
-    # image: ghcr.io/remsky/kokoro-fastapi-gpu:v0.1.0
+    # image: ghcr.io/remsky/kokoro-fastapi-gpu:v${VERSION}
     build:
       context: ../..
       dockerfile: docker/gpu/Dockerfile
     volumes:
       - ../../api:/app/api
+    user: "1001:1001"  # Ensure container runs as UID 1001 (appuser)
     ports:
       - "8880:8880"
     environment:
       - PYTHONPATH=/app:/app/api
       - USE_GPU=true
-      - USE_ONNX=false
       - PYTHONUNBUFFERED=1
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
+              count: all
               capabilities: [gpu]
 
   # # Gradio UI service
   # gradio-ui:
-  #   image: ghcr.io/remsky/kokoro-fastapi-ui:v0.1.0
+  #   image: ghcr.io/remsky/kokoro-fastapi-ui:v${VERSION}
   #   # Uncomment below to build from source instead of using the released image
   #   # build:
   #     # context: ../../ui
